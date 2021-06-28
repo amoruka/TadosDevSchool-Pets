@@ -1,10 +1,8 @@
 ﻿namespace Pets.Persistence.Commands
 {
     using System;
-    using System.Data.Common;
     using System.Threading;
     using System.Threading.Tasks;
-    using Dapper;
     using Domain.Commands.Contexts;
     using global::Commands.Abstractions;
     using global::Database.Abstractions;
@@ -14,11 +12,14 @@
     {
         private readonly IDbTransactionProvider _dbTransactionProvider;
 
+        private readonly PetsContext _dbContext;
 
-        public UpdateFoodCommand(IDbTransactionProvider dbTransactionProvider)
+
+        public UpdateFoodCommand(IDbTransactionProvider dbTransactionProvider, PetsContext dbContext)
         {
             _dbTransactionProvider =
                 dbTransactionProvider ?? throw new ArgumentNullException(nameof(dbTransactionProvider));
+            _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         }
 
 
@@ -26,23 +27,7 @@
             UpdateFoodCommandContext commandContext,
             CancellationToken cancellationToken = default)
         {
-            DbTransaction transaction = await _dbTransactionProvider.GetCurrentTransactionAsync(cancellationToken);
-            DbConnection connection = transaction.Connection;
-
-            await connection.ExecuteAsync(@"
-                UPDATE Food
-                SET
-                    AnimalType = @AnimalType,
-                    Name = @Name,
-                    Count = @Count
-                WHERE
-                    Food.Id = @Id", new
-            {
-                Id = commandContext.Food.Id,
-                Count = commandContext.Food.Count,
-                Name = commandContext.Food.Name,
-                AnimalType = commandContext.Food.AnimalType,
-            }, transaction);
+            await _dbContext.SaveChangesAsync();
         }
     }
 }

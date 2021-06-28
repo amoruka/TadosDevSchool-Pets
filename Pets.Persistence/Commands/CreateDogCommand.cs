@@ -1,10 +1,8 @@
 ﻿namespace Pets.Persistence.Commands
 {
     using System;
-    using System.Data.Common;
     using System.Threading;
     using System.Threading.Tasks;
-    using Dapper;
     using Domain.Commands.Contexts;
     using global::Commands.Abstractions;
     using global::Database.Abstractions;
@@ -14,11 +12,14 @@
     {
         private readonly IDbTransactionProvider _dbTransactionProvider;
 
+        private readonly PetsContext _dbContext;
 
-        public CreateDogCommand(IDbTransactionProvider dbTransactionProvider)
+
+        public CreateDogCommand(IDbTransactionProvider dbTransactionProvider, PetsContext dbContext)
         {
             _dbTransactionProvider =
                 dbTransactionProvider ?? throw new ArgumentNullException(nameof(dbTransactionProvider));
+            _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         }
 
 
@@ -26,43 +27,9 @@
             CreateDogCommandContext commandContext,
             CancellationToken cancellationToken = default)
         {
-            DbTransaction transaction = await _dbTransactionProvider.GetCurrentTransactionAsync(cancellationToken);
-            DbConnection connection = transaction.Connection;
+            await _dbContext.Animals.AddAsync(commandContext.Dog);
 
-            commandContext.Dog.Id = await connection.ExecuteScalarAsync<long>(@"
-                INSERT INTO Animal
-                (
-                    Type,
-                    Name,
-                    BreedId
-                )
-                VALUES 
-                (
-                    @Type,
-                    @Name,
-                    @BreedId
-                ); SELECT last_insert_rowid()", new
-            {
-                Type = commandContext.Dog.Type,
-                Name = commandContext.Dog.Name,
-                BreedId = commandContext.Dog.Breed.Id,
-            }, transaction);
-
-            await connection.ExecuteAsync(@"
-                INSERT INTO Dog
-                (
-                    AnimalId,
-                    TailLength
-                )
-                VALUES
-                (
-                    @AnimalId,
-                    @TailLength
-                )", new
-            {
-                AnimalId = commandContext.Dog.Id,
-                TailLength = commandContext.Dog.TailLength,
-            }, transaction);
+            await _dbContext.SaveChangesAsync(cancellationToken);
         }
     }
 }

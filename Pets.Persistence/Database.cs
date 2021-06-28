@@ -49,17 +49,17 @@
                     );
 
                     CREATE TABLE IF NOT EXISTS Cat (
-                        AnimalId INTEGER NOT NULL,
+                        Id INTEGER NOT NULL,
                         Weight DECIMAL(10, 2),
-                        CONSTRAINT UQ_AnimalId UNIQUE (AnimalId),
-                        CONSTRAINT FK_Cat_Animal FOREIGN KEY (AnimalId) REFERENCES Animal (Id)
+                        CONSTRAINT UQ_AnimalId UNIQUE (Id),
+                        CONSTRAINT FK_Cat_Animal FOREIGN KEY (Id) REFERENCES Animal (Id)
                     );
 
                     CREATE TABLE IF NOT EXISTS Dog (
-                        AnimalId INTEGER NOT NULL,
+                        Id INTEGER NOT NULL,
                         TailLength DECIMAL(10, 2),
-                        CONSTRAINT UQ_AnimalId UNIQUE (AnimalId),
-                        CONSTRAINT FK_Dog_Animal FOREIGN KEY (AnimalId) REFERENCES Animal (Id)
+                        CONSTRAINT UQ_AnimalId UNIQUE (Id),
+                        CONSTRAINT FK_Dog_Animal FOREIGN KEY (Id) REFERENCES Animal (Id)
                     );
 
                     CREATE TABLE IF NOT EXISTS Feeding (

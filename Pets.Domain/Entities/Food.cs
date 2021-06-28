@@ -3,8 +3,9 @@
     using System;
     using global::Domain.Abstractions;
     using Enums;
+    using System.ComponentModel.DataAnnotations.Schema;
 
-
+    [Table("Food")]
     public class Food : IEntity
     {
         [Obsolete("Only for reflection", true)]

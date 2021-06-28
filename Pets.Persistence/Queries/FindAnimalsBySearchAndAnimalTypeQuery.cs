@@ -2,29 +2,30 @@
 {
     using System;
     using System.Collections.Generic;
-    using System.Data.Common;
-    using System.Dynamic;
     using System.Linq;
+    using System.Linq.Expressions;
     using System.Threading;
     using System.Threading.Tasks;
-    using Dapper;
     using Domain.Criteria;
     using Domain.Entities;
-    using Domain.ValueObjects;
-    using Dto;
     using global::Database.Abstractions;
     using global::Queries.Abstractions;
+    using Microsoft.EntityFrameworkCore;
+    using Pets.Persistence;
 
 
     public class FindAnimalsBySearchAndAnimalTypeQuery : IAsyncQuery<FindBySearchAndAnimalType, List<Animal>>
     {
         private readonly IDbTransactionProvider _dbTransactionProvider;
 
+        private readonly PetsContext _dbContext;
 
-        public FindAnimalsBySearchAndAnimalTypeQuery(IDbTransactionProvider dbTransactionProvider)
+
+        public FindAnimalsBySearchAndAnimalTypeQuery(IDbTransactionProvider dbTransactionProvider, PetsContext dbContext)
         {
             _dbTransactionProvider =
                 dbTransactionProvider ?? throw new ArgumentNullException(nameof(dbTransactionProvider));
+            _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         }
 
 
@@ -32,98 +33,37 @@
             FindBySearchAndAnimalType criterion,
             CancellationToken cancellationToken = default)
         {
-            DbTransaction transaction = await _dbTransactionProvider.GetCurrentTransactionAsync(cancellationToken);
-            DbConnection connection = transaction.Connection;
-
-            List<string> conditions = new List<string>();
-            ExpandoObject parameters = new ExpandoObject();
-
-            IDictionary<string, object> parametersMap = parameters;
+            Expression<Func<Animal, bool>> expr = null;
 
             if (!string.IsNullOrWhiteSpace(criterion.Search))
             {
-                conditions.Add("Animal.Name LIKE '%' || @Search || '%'");
-                parametersMap["Search"] = criterion.Search;
+                expr = x => x.Name.Contains(criterion.Search);
             }
 
             if (criterion.AnimalType.HasValue)
             {
-                conditions.Add("Animal.Type = @AnimalType");
-                parametersMap["AnimalType"] = criterion.AnimalType.Value;
+                Expression<Func<Animal, bool>> secondExpr = x => x.Type == criterion.AnimalType;
+                expr = expr != null ? expr.AndAlso(secondExpr) : secondExpr;
             }
 
-            Dictionary<long, Breed> breedsCache = new Dictionary<long, Breed>();
-            Dictionary<long, Food> foodsCache = new Dictionary<long, Food>();
+            IQueryable<Animal> animalsSet;
 
-            List<AnimalDto> dtos = (await connection.QueryAsync<AnimalDto, BreedDto, AnimalDto>(@$"
-                SELECT
-                    Animal.Id,
-                    Animal.Name,
-                    Animal.Type,
-                    Cat.Weight,
-                    Dog.TailLength,
-                    Breed.Id,
-                    Breed.Name,
-                    Breed.AnimalType    
-                FROM Animal
-                JOIN Breed ON Breed.Id = Animal.BreedId
-                LEFT JOIN Cat ON Cat.AnimalId = Animal.Id
-                LEFT JOIN Dog ON Dog.AnimalId = Animal.Id
-                {(conditions.Count > 0 ? $"WHERE {string.Join(" AND ", conditions)}" : string.Empty)}
-                ORDER BY Animal.Name", (animalDto, breedDto) =>
+            if (expr == null)
             {
-                animalDto.Breed = breedDto;
-
-                return animalDto;
-            }, parameters, transaction)).ToList();
-
-            List<Animal> animals = new List<Animal>();
-            
-            foreach (AnimalDto dto in dtos)
-            {
-                List<Feeding> feedings = new List<Feeding>();
-                
-                feedings.AddRange(
-                    await connection.QueryAsync<FeedingDto, FoodDto, Feeding>(@"
-                        SELECT
-                            Feeding.Id,
-                            Feeding.DateTimeUtc,
-                            Feeding.Count,
-                            Food.Id,
-                            Food.Id,
-                            Food.AnimalType,
-                            Food.Name,
-                            Food.Count
-                        FROM Feeding
-                        JOIN Food ON Food.Id = Feeding.FoodId
-                        WHERE Feeding.AnimalId = @AnimalId
-                        ORDER BY Feeding.DateTimeUtc DESC",
-                        (feedingDto, foodDto) =>
-                        {
-                            if (!foodsCache.ContainsKey(foodDto.Id))
-                            {
-                                foodsCache[foodDto.Id] = foodDto.ToEntity();
-                            }
-                            
-                            return new Feeding(
-                                feedingDto.Id,
-                                Helpers.ParseDateTime(feedingDto.DateTimeUtc),
-                                foodsCache[foodDto.Id],
-                                feedingDto.Count);
-                        },
-                        new
-                        {
-                            AnimalId = dto.Id,
-                        }, transaction));
-
-                if (!breedsCache.ContainsKey(dto.Breed.Id))
-                {
-                    breedsCache.Add(dto.Breed.Id, dto.Breed.ToEntity());
-                }
-                
-                animals.Add(dto.ToEntity(breedsCache[dto.Breed.Id], feedings));
+                animalsSet = _dbContext.Animals;
             }
-            
+            else
+            {
+                animalsSet = _dbContext.Animals.Where(expr);
+            }
+
+            // Eager loading
+            var animals = animalsSet
+                .Include(animal => animal.Feedings)
+                .ThenInclude(feeding => feeding.Food)
+                .Include(animal => animal.Breed)
+                .ToList();
+
             return animals;
         }
     }

@@ -2,9 +2,11 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.ComponentModel.DataAnnotations.Schema;
     using Enums;
     using ValueObjects;
 
+    [Table("Cat")]
     public class Cat : Animal
     {
         [Obsolete("Only for reflection", true)]
@@ -33,8 +35,6 @@
         
             Weight = weight;
         }
-
-
 
         public decimal Weight { get; init; }
     }

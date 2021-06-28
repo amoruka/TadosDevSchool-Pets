@@ -1,10 +1,8 @@
 ﻿namespace Pets.Persistence.Commands
 {
     using System;
-    using System.Data.Common;
     using System.Threading;
     using System.Threading.Tasks;
-    using Dapper;
     using Domain.Commands.Contexts;
     using global::Commands.Abstractions;
     using global::Database.Abstractions;
@@ -14,11 +12,14 @@
     {
         private readonly IDbTransactionProvider _dbTransactionProvider;
 
+        private readonly PetsContext _dbContext;
 
-        public CreateFeedingCommand(IDbTransactionProvider dbTransactionProvider)
+
+        public CreateFeedingCommand(IDbTransactionProvider dbTransactionProvider, PetsContext dbContext)
         {
             _dbTransactionProvider =
                 dbTransactionProvider ?? throw new ArgumentNullException(nameof(dbTransactionProvider));
+            _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         }
 
 
@@ -26,30 +27,7 @@
             CreateFeedingCommandContext commandContext,
             CancellationToken cancellationToken = default)
         {
-            DbTransaction transaction = await _dbTransactionProvider.GetCurrentTransactionAsync(cancellationToken);
-            DbConnection connection = transaction.Connection;
-
-            await connection.ExecuteAsync(@"
-                INSERT INTO Feeding
-                (
-                    AnimalId,
-                    FoodId,
-                    DateTimeUtc,
-                    Count
-                )
-                VALUES
-                (
-                    @AnimalId,
-                    @FoodId,
-                    @DateTimeUtc,
-                    @Count
-                );", new
-            {
-                AnimalId = commandContext.Animal.Id,
-                FoodId = commandContext.Feeding.Food.Id,
-                DateTimeUtc = Helpers.FormatDateTime(commandContext.Feeding.DateTimeUtc),
-                Count = commandContext.Feeding.Count,
-            }, transaction);
+            _dbContext.SaveChanges();
         }
     }
 }

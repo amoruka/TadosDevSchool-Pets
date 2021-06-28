@@ -1,103 +1,47 @@
 ﻿namespace Pets.Persistence.Queries
 {
     using System;
-    using System.Collections.Generic;
-    using System.Data.Common;
     using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
-    using Dapper;
     using Domain.Criteria;
     using Domain.Entities;
-    using Domain.ValueObjects;
-    using Dto;
     using global::Database.Abstractions;
     using global::Queries.Abstractions;
-
+    using Microsoft.EntityFrameworkCore;
 
     public class FindAnimalByIdQuery : IAsyncQuery<FindById, Animal>
     {
         private readonly IDbTransactionProvider _dbTransactionProvider;
 
+        private readonly PetsContext _dbContext;
 
-        public FindAnimalByIdQuery(IDbTransactionProvider dbTransactionProvider)
+        public FindAnimalByIdQuery(IDbTransactionProvider dbTransactionProvider, PetsContext dbContext)
         {
             _dbTransactionProvider =
                 dbTransactionProvider ?? throw new ArgumentNullException(nameof(dbTransactionProvider));
+            _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         }
 
 
         public async Task<Animal> AskAsync(FindById criterion, CancellationToken cancellationToken = default)
         {
-            DbTransaction transaction = await _dbTransactionProvider.GetCurrentTransactionAsync(cancellationToken);
-            DbConnection connection = transaction.Connection;
+            var animal = await _dbContext.Animals.SingleAsync(x => x.Id == criterion.Id);
 
-            AnimalDto dto = (await connection.QueryAsync<AnimalDto, BreedDto, AnimalDto>(@"
-                SELECT
-                    Animal.Id,
-                    Animal.Name,
-                    Animal.Type,
-                    Cat.Weight,
-                    Dog.TailLength,
-                    Breed.Id,
-                    Breed.Name,
-                    Breed.AnimalType
-                FROM Animal
-                JOIN Breed ON Breed.Id = Animal.BreedId
-                LEFT JOIN Cat ON Cat.AnimalId = Animal.Id
-                LEFT JOIN Dog ON Dog.AnimalId = Animal.Id
-                WHERE Animal.Id = @Id", (animalDto, breedDto) =>
-            {
-                Breed breed = breedDto.ToEntity();
+            // Explicit loading
+            _dbContext
+                .Entry(animal)
+                .Reference(x => x.Breed)
+                .Load();
 
-                animalDto.Breed = breedDto;
-                
-                return animalDto;
-            }, new
-            {
-                Id = criterion.Id,
-            }, transaction)).SingleOrDefault();
+            _dbContext
+                .Entry(animal)
+                .Collection(x => x.Feedings)
+                .Load();
 
-            List<Feeding> feedings = new List<Feeding>();
+            animal.Feedings.ToList().ForEach(x => _dbContext.Entry(x).Reference(f => f.Food).Load());
             
-            if (dto != null)
-            {
-                Dictionary<long, Food> foodsCache = new Dictionary<long, Food>();
-                
-                feedings.AddRange(
-                    await connection.QueryAsync<FeedingDto, FoodDto, Feeding>(@"
-                        SELECT
-                            Feeding.Id,
-                            Feeding.DateTimeUtc,
-                            Feeding.Count,
-                            Food.Id,
-                            Food.AnimalType,
-                            Food.Name,
-                            Food.Count
-                        FROM Feeding
-                        JOIN Food ON Food.Id = Feeding.FoodId
-                        WHERE Feeding.AnimalId = @AnimalId
-                        ORDER BY Feeding.DateTimeUtc DESC",
-                        (feedingDto, foodDto) =>
-                        {
-                            if (!foodsCache.ContainsKey(foodDto.Id))
-                            {
-                                foodsCache[foodDto.Id] = foodDto.ToEntity();
-                            }
-                            
-                            return new Feeding(
-                                feedingDto.Id,
-                                Helpers.ParseDateTime(feedingDto.DateTimeUtc),
-                                foodsCache[foodDto.Id],
-                                feedingDto.Count);
-                        },
-                        new
-                        {
-                            AnimalId = dto.Id,
-                        }, transaction));
-            }
-
-            return dto?.ToEntity(dto.Breed.ToEntity(), feedings);
+            return animal;
         }
     }
 }

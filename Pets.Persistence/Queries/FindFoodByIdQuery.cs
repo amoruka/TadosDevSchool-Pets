@@ -9,17 +9,20 @@
     using Domain.Entities;
     using global::Database.Abstractions;
     using global::Queries.Abstractions;
-
+    using Microsoft.EntityFrameworkCore;
 
     public class FindFoodByIdQuery : IAsyncQuery<FindById, Food>
     {
         private readonly IDbTransactionProvider _dbTransactionProvider;
 
+        private readonly PetsContext _dbContext;
 
-        public FindFoodByIdQuery(IDbTransactionProvider dbTransactionProvider)
+
+        public FindFoodByIdQuery(IDbTransactionProvider dbTransactionProvider, PetsContext dbContext)
         {
             _dbTransactionProvider =
                 dbTransactionProvider ?? throw new ArgumentNullException(nameof(dbTransactionProvider));
+            _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         }
 
 
@@ -30,10 +33,7 @@
             DbTransaction transaction = await _dbTransactionProvider.GetCurrentTransactionAsync(cancellationToken);
             DbConnection connection = transaction.Connection;
 
-            return await connection.QuerySingleOrDefaultAsync<Food>(@"SELECT Id, Name, AnimalType, Count FROM Food WHERE Id = @Id", new
-            {
-                Id = criterion.Id,
-            }, transaction);
+            return await _dbContext.Foods.SingleAsync(x => x.Id == criterion.Id);
         }
     }
 }

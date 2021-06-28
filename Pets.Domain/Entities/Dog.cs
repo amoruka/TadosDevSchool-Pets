@@ -2,10 +2,12 @@
 {
     using System;
     using System.Collections.Generic;
+    using System.ComponentModel.DataAnnotations.Schema;
     using Enums;
     using ValueObjects;
 
 
+    [Table("Dog")]
     public class Dog : Animal
     {
         [Obsolete("Only for reflection", true)]
@@ -33,7 +35,6 @@
         
             TailLength = tailLength;
         }
-
 
         public decimal TailLength { get; init; }
     }

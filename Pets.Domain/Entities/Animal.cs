@@ -6,7 +6,9 @@
     using global::Domain.Abstractions;
     using Enums;
     using ValueObjects;
+    using System.ComponentModel.DataAnnotations.Schema;
 
+    [Table("Animal")]
     public abstract class Animal : IEntity
     {
         private readonly ISet<Feeding> _feedings = new HashSet<Feeding>();
@@ -71,7 +73,7 @@
             if (food.AnimalType != Type)
                 throw new ArgumentException($"Food animal type expected to be {Type}", nameof(food));
 
-            Feeding feeding = new Feeding(DateTime.UtcNow, food, count);
+            Feeding feeding = new Feeding(DateTime.UtcNow, food, this, count);
             
             _feedings.Add(feeding);
 

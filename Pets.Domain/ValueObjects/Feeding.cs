@@ -11,18 +11,19 @@
         {
         }
         
-        protected internal Feeding(DateTime dateTimeUtc, Food food, int count)
+        protected internal Feeding(DateTime dateTimeUtc, Food food, Animal animal, int count)
         {
             if (count < 0) 
                 throw new ArgumentOutOfRangeException(nameof(count));
 
             DateTimeUtc = dateTimeUtc;
             Food = food ?? throw new ArgumentNullException(nameof(food));
+            Animal = animal ?? throw new ArgumentNullException(nameof(animal));
             Count = count;
         }
 
-        public Feeding(long id, DateTime dateTimeUtc, Food food, int count)
-            : this(dateTimeUtc, food, count)
+        public Feeding(long id, DateTime dateTimeUtc, Food food, Animal animal, int count)
+            : this(dateTimeUtc, food, animal, count)
         {
             Id = id;
         }
@@ -34,6 +35,8 @@
         public DateTime DateTimeUtc { get; init; }
 
         public Food Food { get; init; }
+
+        public Animal Animal { get; init; }
 
         public int Count { get; init; }
     }

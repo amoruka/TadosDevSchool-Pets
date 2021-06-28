@@ -8,17 +8,20 @@
     using Domain.Criteria;
     using global::Database.Abstractions;
     using global::Queries.Abstractions;
-
+    using Microsoft.EntityFrameworkCore;
 
     public class FindFoodsCountByNameAndFoodTypeQuery : IAsyncQuery<FindFoodsCountByNameAndAnimalType, int>
     {
         private readonly IDbTransactionProvider _dbTransactionProvider;
 
+        private readonly PetsContext _dbContext;
 
-        public FindFoodsCountByNameAndFoodTypeQuery(IDbTransactionProvider dbTransactionProvider)
+
+        public FindFoodsCountByNameAndFoodTypeQuery(IDbTransactionProvider dbTransactionProvider, PetsContext dbContext)
         {
             _dbTransactionProvider =
                 dbTransactionProvider ?? throw new ArgumentNullException(nameof(dbTransactionProvider));
+            _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         }
 
 
@@ -29,13 +32,7 @@
             DbTransaction transaction = await _dbTransactionProvider.GetCurrentTransactionAsync(cancellationToken);
             DbConnection connection = transaction.Connection;
 
-            return await connection.ExecuteScalarAsync<int>(
-                "SELECT COUNT(1) FROM Food WHERE Name = @Name AND AnimalType = @AnimalType",
-                new
-                {
-                    Name = criterion.Name,
-                    AnimalType = criterion.AnimalType,
-                });
+            return await _dbContext.Foods.CountAsync(x => x.Name == criterion.Name && x.AnimalType == criterion.AnimalType);
         }
     }
 }

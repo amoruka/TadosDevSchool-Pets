@@ -4,6 +4,7 @@ namespace Pets
     using Autofac.Extensions.ConfiguredModules;
     using Json.Converters.Hierarchy;
     using Microsoft.AspNetCore.Builder;
+    using Microsoft.EntityFrameworkCore;
     using Microsoft.Extensions.Configuration;
     using Microsoft.Extensions.DependencyInjection;
     using Persistence;
@@ -34,6 +35,7 @@ namespace Pets
         public void ConfigureServices(IServiceCollection services)
         {
             services
+                .AddDbContext<PetsContext>(options => options.UseSqlite(Configuration.GetConnectionString("Pets")))
                 .AddAutoMapper(typeof(ApplicationAssemblyMarker).Assembly)
                 .AddControllersWithViews()
                 .ConfigureApiBehaviorOptions(options =>

@@ -5,6 +5,7 @@
     using System.Data.Common;
     using System.Dynamic;
     using System.Linq;
+    using System.Linq.Expressions;
     using System.Threading;
     using System.Threading.Tasks;
     using Dapper;
@@ -18,11 +19,14 @@
     {
         private readonly IDbTransactionProvider _dbTransactionProvider;
 
+        private readonly PetsContext _dbContext;
 
-        public FindBreedsBySearchAndAnimalTypeQuery(IDbTransactionProvider dbTransactionProvider)
+
+        public FindBreedsBySearchAndAnimalTypeQuery(IDbTransactionProvider dbTransactionProvider, PetsContext dbContext)
         {
             _dbTransactionProvider =
                 dbTransactionProvider ?? throw new ArgumentNullException(nameof(dbTransactionProvider));
+            _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         }
 
 
@@ -30,36 +34,20 @@
             FindBySearchAndAnimalType criterion,
             CancellationToken cancellationToken = default)
         {
-            DbTransaction transaction = await _dbTransactionProvider.GetCurrentTransactionAsync(cancellationToken);
-            DbConnection connection = transaction.Connection;
-
-            List<string> conditions = new List<string>();
-            ExpandoObject parameters = new ExpandoObject();
-
-            IDictionary<string, object> parametersMap = parameters;
+            Expression<Func<Breed, bool>> expr = null;
 
             if (!string.IsNullOrWhiteSpace(criterion.Search))
             {
-                conditions.Add("Breed.Name LIKE '%' || @Search || '%'");
-                parametersMap["Search"] = criterion.Search;
+                expr = x => x.Name.Contains(criterion.Search);
             }
 
             if (criterion.AnimalType.HasValue)
             {
-                conditions.Add("Breed.AnimalType = @AnimalType");
-                parametersMap["AnimalType"] = criterion.AnimalType.Value;
+                Expression<Func<Breed, bool>> secondExpr = x => x.AnimalType == criterion.AnimalType;
+                expr = expr != null ? expr.AndAlso(secondExpr) : secondExpr;
             }
 
-            List<Breed> breeds = (await connection.QueryAsync<Breed>(@$"
-                SELECT
-                    Breed.Id,
-                    Breed.AnimalType,
-                    Breed.Name
-                FROM Breed
-                {(conditions.Count > 0 ? $"WHERE {string.Join(" AND ", conditions)}" : string.Empty)}
-                ORDER BY Breed.Name", parameters, transaction)).ToList();
-
-            return breeds;
+            return expr == null ? _dbContext.Breeds.ToList() : _dbContext.Breeds.Where(expr).ToList();
         }
     }
 }
